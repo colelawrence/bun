@@ -78,12 +78,11 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      # macOS dependencies
+      # macOS dependencies (uses Apple Clang from Xcode, matching Bun's Buildkite CI)
       - name: Install macOS dependencies
         if: matrix.platform == 'darwin'
         run: |
-          brew install automake ccache cmake coreutils gnu-sed go libiconv libtool ninja pkg-config rust llvm@19
-          echo "$(brew --prefix llvm@19)/bin" >> $GITHUB_PATH
+          brew install automake ccache cmake coreutils gnu-sed go libiconv libtool ninja pkg-config rust
 
       # Linux dependencies
       - name: Install Linux dependencies
