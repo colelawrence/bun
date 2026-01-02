@@ -88,10 +88,13 @@ jobs:
       - name: Install Linux dependencies
         if: matrix.platform == 'linux'
         run: |
-          # Add LLVM repository
+          # Add LLVM 19 repository
           wget https://apt.llvm.org/llvm.sh -O /tmp/llvm.sh
           chmod +x /tmp/llvm.sh
           sudo /tmp/llvm.sh 19 all
+
+          # Add GCC 13 repository (needed for C++23 and libstdc++)
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
 
           sudo apt-get update
           sudo apt-get install -y \
@@ -103,7 +106,13 @@ jobs:
             rustc \
             cargo \
             libtool \
-            ccache
+            ccache \
+            gcc-13 \
+            g++-13 \
+            libgcc-13-dev \
+            libstdc++-13-dev \
+            libatomic1 \
+            libc6-dev
 
       - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1.2
@@ -114,6 +123,8 @@ jobs:
       - name: Build release
         env:
           CMAKE_BUILD_PARALLEL_LEVEL: ${{ runner.os == 'macOS' && '3' || '4' }}
+          # Suppress undefined-var-template warning on Linux (llvm-19 is stricter than Apple Clang)
+          CXXFLAGS: ${{ matrix.platform == 'linux' && '-Wno-error=undefined-var-template' || '' }}
         run: |
           # Ensure ccache is in path
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
