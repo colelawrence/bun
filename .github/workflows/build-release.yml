@@ -1,0 +1,245 @@
+name: Build Release Binaries
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'cmake/**'
+      - 'build.zig'
+      - 'CMakeLists.txt'
+      - '.github/workflows/build-release.yml'
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+concurrency:
+  group: build-release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUN_VERSION: "1.2.3"
+
+jobs:
+  generate-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate version
+        id: version
+        run: |
+          # Read version from package.json and append build info
+          BASE_VERSION=$(jq -r '.version' package.json)
+          DATE=$(date -u +"%Y%m%d")
+          VERSION="${BASE_VERSION}-dev.${DATE}.${{ github.run_number }}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+  build:
+    needs: generate-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS builds - must run on macOS runners
+          - os: macos-14
+            name: darwin-aarch64
+            arch: aarch64
+            platform: darwin
+          - os: macos-13
+            name: darwin-x64
+            arch: x64
+            platform: darwin
+          # Linux builds - run on Linux runners
+          - os: ubuntu-22.04
+            name: linux-x64
+            arch: x64
+            platform: linux
+          - os: ubuntu-22.04-arm
+            name: linux-aarch64
+            arch: aarch64
+            platform: linux
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      # macOS dependencies
+      - name: Install macOS dependencies
+        if: matrix.platform == 'darwin'
+        run: |
+          brew install automake ccache cmake coreutils gnu-sed go libiconv libtool ninja pkg-config rust llvm@19
+          echo "$(brew --prefix llvm@19)/bin" >> $GITHUB_PATH
+
+      # Linux dependencies
+      - name: Install Linux dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          # Add LLVM repository
+          wget https://apt.llvm.org/llvm.sh -O /tmp/llvm.sh
+          chmod +x /tmp/llvm.sh
+          sudo /tmp/llvm.sh 19 all
+
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            pkg-config \
+            golang \
+            rustc \
+            cargo \
+            libtool \
+            ccache
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ matrix.name }}-release
+          max-size: 2G
+
+      - name: Build release
+        env:
+          CMAKE_BUILD_PARALLEL_LEVEL: ${{ runner.os == 'macOS' && '3' || '4' }}
+        run: |
+          # Ensure ccache is in path
+          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
+
+          # Build release
+          bun run build:release
+
+      - name: Package binary
+        run: |
+          VERSION="${{ needs.generate-version.outputs.version }}"
+          ARTIFACT_NAME="bun-${{ matrix.name }}"
+
+          mkdir -p "dist/${ARTIFACT_NAME}"
+
+          # Copy the main binary
+          if [ -f "build/release/bun" ]; then
+            cp "build/release/bun" "dist/${ARTIFACT_NAME}/"
+          else
+            echo "Error: bun binary not found"
+            ls -la build/release/ || true
+            exit 1
+          fi
+
+          # Copy profile binary if it exists
+          if [ -f "build/release/bun-profile" ]; then
+            cp "build/release/bun-profile" "dist/${ARTIFACT_NAME}/"
+          fi
+
+          # Create zip (matching Bun's release format)
+          cd dist
+          zip -r "${ARTIFACT_NAME}.zip" "${ARTIFACT_NAME}"
+
+          echo "✓ Created ${ARTIFACT_NAME}.zip"
+          ls -lh "${ARTIFACT_NAME}.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bun-${{ matrix.name }}
+          path: dist/bun-${{ matrix.name }}.zip
+          retention-days: 7
+          if-no-files-found: error
+
+  release:
+    needs: [generate-version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: bun-*
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum bun-*.zip > checksums.txt
+          cat checksums.txt
+
+      - name: Compose release body
+        run: |
+          VERSION="${{ needs.generate-version.outputs.version }}"
+          cat > dist/release_body.md <<EOF
+          Custom Bun build from [${{ github.repository }}](https://github.com/${{ github.repository }}).
+
+          Built from commit [\`${GITHUB_SHA:0:7}\`](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+
+          ## Installation
+
+          Download the appropriate archive for your platform and extract it:
+
+          \`\`\`bash
+          # macOS ARM64 (Apple Silicon)
+          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/${VERSION}/bun-darwin-aarch64.zip" -o bun.zip
+          unzip bun.zip && sudo mv bun-darwin-aarch64/bun /usr/local/bin/
+
+          # macOS x64 (Intel)
+          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/${VERSION}/bun-darwin-x64.zip" -o bun.zip
+          unzip bun.zip && sudo mv bun-darwin-x64/bun /usr/local/bin/
+
+          # Linux x64
+          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/${VERSION}/bun-linux-x64.zip" -o bun.zip
+          unzip bun.zip && sudo mv bun-linux-x64/bun /usr/local/bin/
+
+          # Linux ARM64
+          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/${VERSION}/bun-linux-aarch64.zip" -o bun.zip
+          unzip bun.zip && sudo mv bun-linux-aarch64/bun /usr/local/bin/
+          \`\`\`
+
+          ## Installation with mise
+
+          Add to your \`.mise.toml\`:
+
+          \`\`\`toml
+          [tools."http:bun".platforms]
+          macos-arm64 = { url = "https://github.com/${{ github.repository }}/releases/download/${VERSION}/bun-darwin-aarch64.zip" }
+          macos-x64 = { url = "https://github.com/${{ github.repository }}/releases/download/${VERSION}/bun-darwin-x64.zip" }
+          linux-x64 = { url = "https://github.com/${{ github.repository }}/releases/download/${VERSION}/bun-linux-x64.zip" }
+          linux-arm64 = { url = "https://github.com/${{ github.repository }}/releases/download/${VERSION}/bun-linux-aarch64.zip" }
+          \`\`\`
+
+          ## Checksums (SHA256)
+
+          \`\`\`text
+          EOF
+          cat dist/checksums.txt >> dist/release_body.md
+          echo '```' >> dist/release_body.md
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.generate-version.outputs.version }}
+          name: Release ${{ needs.generate-version.outputs.version }}
+          body_path: dist/release_body.md
+          files: |
+            dist/bun-*.zip
+            dist/checksums.txt
+          draft: false
+          prerelease: true
