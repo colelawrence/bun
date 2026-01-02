@@ -49,10 +49,11 @@ jobs:
             name: darwin-aarch64
             arch: aarch64
             platform: darwin
-          - os: macos-14-large
-            name: darwin-x64
-            arch: x64
-            platform: darwin
+          # Commented out - requires paid GitHub runners
+          # - os: macos-14-large
+          #   name: darwin-x64
+          #   arch: x64
+          #   platform: darwin
           # Linux builds - run on Linux runners
           - os: ubuntu-22.04
             name: linux-x64
