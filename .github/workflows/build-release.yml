@@ -10,9 +10,6 @@ on:
       - 'build.zig'
       - 'CMakeLists.txt'
       - '.github/workflows/build-release.yml'
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
   workflow_dispatch:
 
 concurrency:
