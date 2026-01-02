@@ -124,7 +124,8 @@ jobs:
         env:
           CMAKE_BUILD_PARALLEL_LEVEL: ${{ runner.os == 'macOS' && '3' || '4' }}
           # Suppress undefined-var-template warning (llvm-19 is stricter about JSC template usage)
-          CXXFLAGS: "-Wno-error=undefined-var-template"
+          # On macOS, force Apple's libc++ to avoid llvm's libc++ header issues with C++23 ranges
+          CXXFLAGS: "-Wno-error=undefined-var-template ${{ matrix.platform == 'darwin' && '--stdlib=libc++' || '' }}"
         run: |
           # Ensure ccache is in path
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
