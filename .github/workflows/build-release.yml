@@ -123,15 +123,20 @@ jobs:
       - name: Build release
         env:
           CMAKE_BUILD_PARALLEL_LEVEL: ${{ runner.os == 'macOS' && '3' || '4' }}
-          # Suppress undefined-var-template warning (llvm-19 is stricter about JSC template usage)
-          # On macOS, force Apple's libc++ to avoid llvm's libc++ header issues with C++23 ranges
-          CXXFLAGS: "-Wno-error=undefined-var-template ${{ matrix.platform == 'darwin' && '--stdlib=libc++' || '' }}"
         run: |
           # Ensure ccache is in path
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
 
-          # Build release
-          bun run build:release
+          # Build release with extra flags:
+          # - Suppress undefined-var-template warning (llvm-19 is stricter about JSC template usage)
+          # - On macOS, force Apple's libc++ to avoid llvm's libc++ header issues with C++23 ranges
+          EXTRA_CXX_FLAGS="-Wno-error=undefined-var-template"
+          if [[ "${{ matrix.platform }}" == "darwin" ]]; then
+            EXTRA_CXX_FLAGS="$EXTRA_CXX_FLAGS -nostdinc++ -isystem /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1 -isystem /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"
+          fi
+
+          bun ./scripts/build.mjs -GNinja -DCMAKE_BUILD_TYPE=Release -B build/release \
+            "-DCMAKE_CXX_FLAGS=$EXTRA_CXX_FLAGS"
 
       - name: Package binary
         run: |
