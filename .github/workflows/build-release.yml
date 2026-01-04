@@ -129,14 +129,8 @@ jobs:
 
           # Build release with extra flags:
           # - Suppress undefined-var-template warning (llvm-19 is stricter about JSC template usage)
-          # - On macOS, force Apple's libc++ to avoid llvm's libc++ header issues with C++23 ranges
-          EXTRA_CXX_FLAGS="-Wno-error=undefined-var-template"
-          if [[ "${{ matrix.platform }}" == "darwin" ]]; then
-            EXTRA_CXX_FLAGS="$EXTRA_CXX_FLAGS -nostdinc++ -isystem /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1 -isystem /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1"
-          fi
-
           bun ./scripts/build.mjs -GNinja -DCMAKE_BUILD_TYPE=Release -B build/release \
-            "-DCMAKE_CXX_FLAGS=$EXTRA_CXX_FLAGS"
+            "-DCMAKE_CXX_FLAGS=-Wno-error=undefined-var-template"
 
       - name: Package binary
         run: |

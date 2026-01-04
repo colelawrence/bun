@@ -47,19 +47,19 @@ CXXFLAGS: "-Wno-error=undefined-var-template"
 
 ---
 
-### 3. LLVM 19's libc++ C++23 Ranges Header Issue
+### 3. C++23 Ranges Header Issue with `#define private public`
 
 **Error:**
 ```
-/opt/homebrew/Cellar/llvm@19/19.1.7/bin/../include/c++/v1/__ranges/lazy_split_view.h:143:10: 
-error: '__outer_iterator' redeclared with 'public' access
+__ranges/lazy_split_view.h:143:10: error: '__outer_iterator' redeclared with 'public' access
 ```
 
-**Cause:** When using LLVM 19's clang on macOS, it defaults to LLVM's own libc++ headers. These have an access specifier conflict in the C++23 ranges implementation that causes errors when compiling V8/Node.js compatibility headers.
+**Cause:** Bun's `src/bun.js/bindings/v8/real_v8.h` uses `#define private public` to access V8 internals. This breaks standard library headers that have `private` forward declarations. The file pre-includes many stdlib headers before the macro, but `<ranges>` was missing.
 
-**Solution:** Force Apple's libc++ instead of LLVM's:
-```yaml
-CXXFLAGS: "${{ matrix.platform == 'darwin' && '--stdlib=libc++' || '' }}"
+**Solution:** Add `#include <ranges>` to the pre-include list in `real_v8.h`:
+```cpp
+// In src/bun.js/bindings/v8/real_v8.h, before #define private public:
+#include <ranges>
 ```
 
 ---
