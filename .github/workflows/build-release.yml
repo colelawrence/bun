@@ -59,13 +59,14 @@ jobs:
             name: linux-x64
             arch: x64
             platform: linux
-          - os: ubuntu-22.04-arm
-            name: linux-aarch64
-            arch: aarch64
-            platform: linux
+          # Disabled for now - focus on x64 + macOS aarch64 first
+          # - os: ubuntu-22.04-arm
+          #   name: linux-aarch64
+          #   arch: aarch64
+          #   platform: linux
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 120
+    timeout-minutes: 180
 
     steps:
       # Free up disk space on Linux runners (Bun build requires ~30GB)
