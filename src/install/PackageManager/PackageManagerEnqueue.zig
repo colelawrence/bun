@@ -492,7 +492,9 @@ pub fn enqueueDependencyWithMainAndSuccessFn(
                 }
 
                 // `name_hash` stays the same
-                break :version .{ new, false };
+                // For overrides with file: paths (tarballs), resolve relative to workspace root
+                // since overrides are always defined in the root package.json
+                break :version .{ new, new.tag == .tarball };
             }
 
             if (dependency.version.tag == .catalog) {

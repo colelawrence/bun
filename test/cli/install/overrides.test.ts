@@ -247,3 +247,72 @@ test("overrides do not apply to workspaces", async () => {
   expect(await exited).toBe(0);
   expect(await stderr.text()).not.toContain("Saved lockfile");
 });
+
+import { file } from "bun";
+import { describe } from "bun:test";
+import { copyFile, exists, mkdir } from "fs/promises";
+
+describe("file: protocol in overrides", () => {
+  test.concurrent(
+    "override with file: tarball referenced from workspace package resolves relative to root",
+    async () => {
+      // Create temp directory
+      const packageDir = tmpdirSync();
+
+      // Create vendored directory and copy the test tarball
+      const vendoredDir = join(packageDir, "vendored");
+      await mkdir(vendoredDir, { recursive: true });
+      await copyFile(join(__dirname, "bar-0.0.2.tgz"), join(vendoredDir, "bar-0.0.2.tgz"));
+
+      // Create root package.json with override containing file: path
+      await write(
+        join(packageDir, "package.json"),
+        JSON.stringify({
+          name: "override-file-tarball-test",
+          workspaces: ["packages/*"],
+          overrides: {
+            bar: "file:./vendored/bar-0.0.2.tgz",
+          },
+        }),
+      );
+
+      // Create workspace package that has a dependency that should be overridden
+      const myAppDir = join(packageDir, "packages", "my-app");
+      await mkdir(myAppDir, { recursive: true });
+      await write(
+        join(myAppDir, "package.json"),
+        JSON.stringify({
+          name: "my-app",
+          dependencies: {
+            // This version doesn't exist on npm but will be overridden
+            bar: "0.0.1",
+          },
+        }),
+      );
+
+      // Run bun install with hoisted linker (consistent with other override tests)
+      await using proc = Bun.spawn({
+        cmd: [bunExe(), "install", "--linker=hoisted"],
+        cwd: packageDir,
+        env: bunEnv,
+        stderr: "pipe",
+        stdout: "pipe",
+      });
+
+      const [stderr, stdout, exitCode] = await Promise.all([proc.stderr.text(), proc.stdout.text(), proc.exited]);
+
+      // Check stderr for errors first to give useful debug output
+      expect(stderr).not.toContain("failed to resolve");
+
+      // The package should be installed correctly - the file: path in the override
+      // should resolve relative to root, not relative to the workspace package
+      expect(await exists(join(packageDir, "node_modules", "bar", "package.json"))).toBeTrue();
+
+      const installedPkg = await file(join(packageDir, "node_modules", "bar", "package.json")).json();
+      expect(installedPkg.name).toBe("bar");
+      expect(installedPkg.version).toBe("0.0.2");
+
+      expect(exitCode).toBe(0);
+    },
+  );
+});
