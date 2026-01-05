@@ -114,6 +114,37 @@ sudo apt-get install -y \
 
 ---
 
+### 7. Linux Disk Space Issues
+
+**Error:**
+```
+System.IO.IOException: No space left on device
+```
+
+**Cause:** GitHub-hosted Ubuntu runners have ~14GB of free disk space, but Bun's build requires ~30GB due to:
+- Large WebKit/JSC dependencies
+- Debug symbols and intermediate object files
+- LLVM 19 installation (~2GB)
+
+**Solution:** Add a disk cleanup step at the start of Linux builds:
+```yaml
+- name: Free disk space (Linux)
+  if: matrix.platform == 'linux'
+  run: |
+    # Remove large pre-installed software we don't need
+    sudo rm -rf /usr/share/dotnet          # ~6GB
+    sudo rm -rf /usr/local/lib/android     # ~10GB
+    sudo rm -rf /opt/ghc                   # ~2GB
+    sudo rm -rf /opt/hostedtoolcache/CodeQL
+    sudo rm -rf /usr/local/share/boost
+    sudo rm -rf /usr/share/swift
+    sudo apt-get clean
+```
+
+This frees up ~20GB of additional space.
+
+---
+
 ## Final Working CXXFLAGS
 
 ```yaml
