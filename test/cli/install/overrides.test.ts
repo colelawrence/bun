@@ -315,4 +315,76 @@ describe("file: protocol in overrides", () => {
       expect(exitCode).toBe(0);
     },
   );
+
+  test.concurrent("override with file: tarball applies to transitive dependencies in workspace", async () => {
+    // Create temp directory
+    const packageDir = tmpdirSync();
+
+    // Create vendored directory and copy the test tarballs
+    // depends-on-monkey has a dependency on monkey@0.0.2
+    const vendoredDir = join(packageDir, "vendored");
+    await mkdir(vendoredDir, { recursive: true });
+    await copyFile(join(__dirname, "depends-on-monkey-0.0.2.tgz"), join(vendoredDir, "depends-on-monkey-0.0.2.tgz"));
+    await copyFile(join(__dirname, "monkey-0.0.2.tgz"), join(vendoredDir, "monkey-0.0.2.tgz"));
+
+    // Create root package.json with overrides for both packages
+    // The key test: monkey is a TRANSITIVE dependency (depends-on-monkey -> monkey)
+    // and the override should apply to it
+    await write(
+      join(packageDir, "package.json"),
+      JSON.stringify({
+        name: "override-transitive-test",
+        workspaces: ["packages/*"],
+        overrides: {
+          "depends-on-monkey": "file:./vendored/depends-on-monkey-0.0.2.tgz",
+          monkey: "file:./vendored/monkey-0.0.2.tgz",
+        },
+      }),
+    );
+
+    // Create workspace package that depends on depends-on-monkey
+    // This will transitively depend on monkey
+    const myAppDir = join(packageDir, "packages", "my-app");
+    await mkdir(myAppDir, { recursive: true });
+    await write(
+      join(myAppDir, "package.json"),
+      JSON.stringify({
+        name: "my-app",
+        dependencies: {
+          // This version doesn't exist on npm but will be overridden
+          "depends-on-monkey": "0.0.1",
+        },
+      }),
+    );
+
+    // Run bun install with hoisted linker
+    await using proc = Bun.spawn({
+      cmd: [bunExe(), "install", "--linker=hoisted"],
+      cwd: packageDir,
+      env: bunEnv,
+      stderr: "pipe",
+      stdout: "pipe",
+    });
+
+    const [stderr, stdout, exitCode] = await Promise.all([proc.stderr.text(), proc.stdout.text(), proc.exited]);
+
+    // Check stderr for errors first
+    expect(stderr).not.toContain("failed to resolve");
+
+    // Verify the direct dependency was installed from override
+    expect(await exists(join(packageDir, "node_modules", "depends-on-monkey", "package.json"))).toBeTrue();
+    const directPkg = await file(join(packageDir, "node_modules", "depends-on-monkey", "package.json")).json();
+    expect(directPkg.name).toBe("depends-on-monkey");
+    expect(directPkg.version).toBe("0.0.2");
+
+    // Verify the TRANSITIVE dependency (monkey) was also installed from override
+    // This is the key assertion - the file: path for monkey should resolve relative
+    // to workspace root even though it's a transitive dependency
+    expect(await exists(join(packageDir, "node_modules", "monkey", "package.json"))).toBeTrue();
+    const transitivePkg = await file(join(packageDir, "node_modules", "monkey", "package.json")).json();
+    expect(transitivePkg.name).toBe("monkey");
+    expect(transitivePkg.version).toBe("0.0.2");
+
+    expect(exitCode).toBe(0);
+  });
 });
