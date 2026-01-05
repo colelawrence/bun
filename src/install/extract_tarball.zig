@@ -9,7 +9,7 @@ skip_verify: bool = false,
 integrity: Integrity = .{},
 url: strings.StringOrTinyString,
 package_manager: *PackageManager,
-/// If true, the tarball path came from a catalog entry (always defined in root package.json),
+/// If true, the tarball path came from a catalog entry or override (always defined in root package.json),
 /// so the path should be resolved relative to the workspace root, not the workspace package.
 from_catalog: bool = false,
 
