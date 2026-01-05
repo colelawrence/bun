@@ -17,7 +17,7 @@ on:
 
 concurrency:
   group: build-release-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   BUN_VERSION: "1.2.3"
