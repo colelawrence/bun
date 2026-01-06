@@ -44,51 +44,42 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS builds - must run on macOS runners
-          - os: macos-14
+          # macOS builds - Namespace self-hosted runner
+          - os: namespace-profile-macos-bun
             name: darwin-aarch64
             arch: aarch64
             platform: darwin
-          # Commented out - requires paid GitHub runners
-          # - os: macos-14-large
-          #   name: darwin-x64
-          #   arch: x64
-          #   platform: darwin
-          # Linux builds - run on Linux runners
-          - os: ubuntu-22.04
+          # Linux builds - Namespace self-hosted runner
+          - os: namespace-profile-linux-bun-x64
             name: linux-x64
             arch: x64
             platform: linux
-          # Disabled for now - focus on x64 + macOS aarch64 first
-          # - os: ubuntu-22.04-arm
-          #   name: linux-aarch64
-          #   arch: aarch64
-          #   platform: linux
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 180
 
     steps:
-      # Free up disk space on Linux runners (Bun build requires ~30GB)
-      - name: Free disk space (Linux)
-        if: matrix.platform == 'linux'
-        run: |
-          echo "=== Disk space before cleanup ==="
-          df -h /
-          
-          # Remove large pre-installed software we don't need
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo rm -rf /usr/local/share/boost
-          sudo rm -rf /usr/share/swift
-          
-          # Clean apt cache
-          sudo apt-get clean
-          
-          echo "=== Disk space after cleanup ==="
-          df -h /
+      # NOTE: Disk cleanup was required for GitHub-hosted runners (ubuntu-22.04)
+      # which only have ~14GB free. Namespace self-hosted runners have adequate storage.
+      # - name: Free disk space (Linux)
+      #   if: matrix.platform == 'linux'
+      #   run: |
+      #     echo "=== Disk space before cleanup ==="
+      #     df -h /
+      #     
+      #     # Remove large pre-installed software we don't need
+      #     sudo rm -rf /usr/share/dotnet
+      #     sudo rm -rf /usr/local/lib/android
+      #     sudo rm -rf /opt/ghc
+      #     sudo rm -rf /opt/hostedtoolcache/CodeQL
+      #     sudo rm -rf /usr/local/share/boost
+      #     sudo rm -rf /usr/share/swift
+      #     
+      #     # Clean apt cache
+      #     sudo apt-get clean
+      #     
+      #     echo "=== Disk space after cleanup ==="
+      #     df -h /
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -144,7 +135,7 @@ jobs:
 
       - name: Build release
         env:
-          CMAKE_BUILD_PARALLEL_LEVEL: ${{ runner.os == 'macOS' && '3' || '4' }}
+          CMAKE_BUILD_PARALLEL_LEVEL: ${{ runner.os == 'macOS' && '6' || '4' }}
         run: |
           # Ensure ccache is in path
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
