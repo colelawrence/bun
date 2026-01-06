@@ -233,10 +233,9 @@ pub fn callback(task: *ThreadPool.Task) void {
         .local_tarball => {
             var abs_buf: bun.PathBuffer = undefined;
             const tarball_path, const normalize = tarball_path: {
-                // If the tarball path came from a catalog entry, it should always be resolved
-                // relative to the workspace root (where catalogs are defined), not relative
-                // to the workspace package that references the catalog.
-                if (this.request.local_tarball.tarball.from_catalog) {
+                // If resolve_relative_to_root is set, the path came from a catalog or override
+                // (both defined in root package.json), so resolve relative to workspace root.
+                if (this.request.local_tarball.tarball.resolve_relative_to_root) {
                     break :tarball_path .{ this.request.local_tarball.tarball.url.slice(), true };
                 }
 
@@ -251,8 +250,7 @@ pub fn callback(task: *ThreadPool.Task) void {
                 }
 
                 // Construct an absolute path to the tarball.
-                // If a workspace directly depends on a tarball path (not via catalog),
-                // it should be relative to the workspace.
+                // Direct file: dependency in a workspace package - resolve relative to that workspace.
                 const workspace_path = workspace_res.value.workspace.slice(manager.lockfile.buffers.string_bytes.items);
                 break :tarball_path .{
                     Path.joinAbsStringBuf(

@@ -151,7 +151,7 @@ pub fn enqueueTarballForReading(
         alias,
         path,
         resolution.*,
-        false,
+        false, // Already resolved path, not from catalog/override
     )));
 }
 
@@ -452,7 +452,12 @@ pub fn enqueueDependencyWithMainAndSuccessFn(
         else => dependency.name_hash,
     };
 
-    const version, const from_catalog = version: {
+    // Resolve version and determine path resolution context:
+    // - `resolve_relative_to_root = true`: Version comes from root package.json (catalogs, overrides)
+    //   so file: paths resolve relative to workspace root
+    // - `resolve_relative_to_root = false`: Version is a direct dependency of a workspace package,
+    //   so file: paths resolve relative to that workspace package
+    const version, const resolve_relative_to_root = version: {
         if (dependency.version.tag == .npm) {
             if (this.known_npm_aliases.get(name_hash)) |aliased| {
                 const group = dependency.version.value.npm.version;
@@ -1136,7 +1141,7 @@ pub fn enqueueDependencyWithMainAndSuccessFn(
                         this.lockfile.str(&dependency.name),
                         url,
                         res,
-                        from_catalog,
+                        resolve_relative_to_root,
                     )));
                 },
                 .remote => {
@@ -1298,7 +1303,7 @@ fn enqueueLocalTarball(
     name: string,
     path: string,
     resolution: Resolution,
-    from_catalog: bool,
+    resolve_relative_to_root: bool,
 ) *ThreadPool.Task {
     var task = this.preallocated_resolve_tasks.get();
     task.* = Task{
@@ -1323,7 +1328,7 @@ fn enqueueLocalTarball(
                         *FileSystem.FilenameStore,
                         FileSystem.FilenameStore.instance,
                     ) catch unreachable,
-                    .from_catalog = from_catalog,
+                    .resolve_relative_to_root = resolve_relative_to_root,
                 },
             },
         },
