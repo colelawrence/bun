@@ -116,8 +116,6 @@ jobs:
             ninja-build \
             pkg-config \
             golang \
-            rustc \
-            cargo \
             libtool \
             ccache \
             gcc-13 \
@@ -126,6 +124,10 @@ jobs:
             libstdc++-13-dev \
             libatomic1 \
             libc6-dev
+
+          # Install Rust via rustup (apt version is too old for Cargo.lock v4)
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1.2
