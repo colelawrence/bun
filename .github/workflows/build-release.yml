@@ -223,17 +223,9 @@ jobs:
           curl -fsSL "https://github.com/${{ github.repository }}/releases/download/${VERSION}/bun-darwin-aarch64.zip" -o bun.zip
           unzip bun.zip && sudo mv bun-darwin-aarch64/bun /usr/local/bin/
 
-          # macOS x64 (Intel)
-          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/${VERSION}/bun-darwin-x64.zip" -o bun.zip
-          unzip bun.zip && sudo mv bun-darwin-x64/bun /usr/local/bin/
-
           # Linux x64
           curl -fsSL "https://github.com/${{ github.repository }}/releases/download/${VERSION}/bun-linux-x64.zip" -o bun.zip
           unzip bun.zip && sudo mv bun-linux-x64/bun /usr/local/bin/
-
-          # Linux ARM64
-          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/${VERSION}/bun-linux-aarch64.zip" -o bun.zip
-          unzip bun.zip && sudo mv bun-linux-aarch64/bun /usr/local/bin/
           \`\`\`
 
           ## Installation with mise
@@ -243,9 +235,7 @@ jobs:
           \`\`\`toml
           [tools."http:bun".platforms]
           macos-arm64 = { url = "https://github.com/${{ github.repository }}/releases/download/${VERSION}/bun-darwin-aarch64.zip" }
-          macos-x64 = { url = "https://github.com/${{ github.repository }}/releases/download/${VERSION}/bun-darwin-x64.zip" }
           linux-x64 = { url = "https://github.com/${{ github.repository }}/releases/download/${VERSION}/bun-linux-x64.zip" }
-          linux-arm64 = { url = "https://github.com/${{ github.repository }}/releases/download/${VERSION}/bun-linux-aarch64.zip" }
           \`\`\`
 
           ## Checksums (SHA256)

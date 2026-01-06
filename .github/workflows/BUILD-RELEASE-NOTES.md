@@ -143,6 +143,23 @@ System.IO.IOException: No space left on device
 
 This frees up ~20GB of additional space.
 
+**Current approach:** We use Namespace self-hosted runners which have adequate storage.
+
+---
+
+### 8. Linux LTO Memory Requirements
+
+**Error:**
+```
+clang++: error: unable to execute command: Killed
+```
+
+**Cause:** Bun's `cmake/Options.cmake` enables LTO by default when `RELEASE AND LINUX AND CI` is true. Full LTO requires 16-32GB RAM during linking.
+
+**Solution:** Use runners with adequate RAM (16GB+). Namespace self-hosted runners (`namespace-profile-linux-bun-x64`) provide this.
+
+**Alternative:** Disable LTO with `-DENABLE_LTO=OFF` if using smaller runners.
+
 ---
 
 ## Final Working CXXFLAGS
